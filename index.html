@@ -70,6 +70,57 @@ highScoreEl.textContent = highScore;
 
 let snake, direction, nextDirection, food, score, speedMs, timerId, running;
 
+// --- Sound effects (Web Audio API, no audio files needed) -----------------
+let audioCtx = null;
+
+function ensureAudioContext() {
+  // Browsers won't let audio play until a user gesture (keydown/click)
+  // unlocks the context, so this is called from those event handlers.
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function playTone(freq, duration, type = 'square', volume = 0.2) {
+  const ctx = ensureAudioContext();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  gain.gain.setValueAtTime(volume, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration);
+}
+
+function playScoreSound() {
+  // Short upbeat blip, classic arcade "pickup" sound.
+  playTone(880, 0.1, 'square', 0.2);
+}
+
+function playGameOverSound() {
+  // Descending tone: pitch slides down as the sound fades out.
+  const ctx = ensureAudioContext();
+  const duration = 0.6;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(440, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + duration);
+  gain.gain.setValueAtTime(0.2, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration);
+}
+
 function randomCell() {
   return {
     x: Math.floor(Math.random() * GRID_SIZE),
@@ -106,6 +157,7 @@ function endGame() {
   clearInterval(timerId);
   overlayTextEl.textContent = `Game Over — Score: ${score} (High Score: ${highScore})`;
   overlayEl.style.display = 'block';
+  playGameOverSound();
 }
 
 function tick() {
@@ -128,6 +180,7 @@ function tick() {
   if (head.x === food.x && head.y === food.y) {
     score++;
     scoreEl.textContent = score;
+    playScoreSound();
     if (score > highScore) {
       highScore = score;
       highScoreEl.textContent = highScore;
@@ -168,6 +221,7 @@ const KEY_DIRECTIONS = {
 };
 
 document.addEventListener('keydown', (e) => {
+  ensureAudioContext(); // any keypress counts as the user gesture that unlocks audio
   if (!running) {
     if (e.key === ' ') resetGame();
     return;
@@ -179,7 +233,10 @@ document.addEventListener('keydown', (e) => {
   nextDirection = newDir;
 });
 
-restartBtn.addEventListener('click', resetGame);
+restartBtn.addEventListener('click', () => {
+  ensureAudioContext();
+  resetGame();
+});
 
 resetGame();
 </script>
