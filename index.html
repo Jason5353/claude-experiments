@@ -1,0 +1,178 @@
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #1e1e2e;
+    font-family: sans-serif;
+    color: #eee;
+  }
+  h1 { margin: 0 0 10px; }
+  #hud { margin-bottom: 10px; font-size: 20px; }
+  canvas {
+    background: #111;
+    border: 3px solid #555;
+  }
+  #overlay {
+    position: absolute;
+    text-align: center;
+    color: #fff;
+    display: none;
+  }
+  #overlay button {
+    margin-top: 10px;
+    padding: 8px 16px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #help { margin-top: 10px; font-size: 14px; color: #aaa; }
+</style>
+</head>
+<body>
+
+<h1>Snake</h1>
+<div id="hud">Score: <span id="score">0</span></div>
+
+<div style="position: relative;">
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="overlay">
+    <div id="overlay-text" style="font-size: 28px;">Game Over</div>
+    <button id="restart-btn">Restart</button>
+  </div>
+</div>
+
+<div id="help">Arrow keys or WASD to move &middot; Space to restart after game over</div>
+
+<script>
+const CELL_SIZE = 20;
+const GRID_SIZE = 20; // 20x20 cells => 400x400 canvas
+const START_SPEED_MS = 120;
+
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const overlayEl = document.getElementById('overlay');
+const overlayTextEl = document.getElementById('overlay-text');
+const restartBtn = document.getElementById('restart-btn');
+
+let snake, direction, nextDirection, food, score, speedMs, timerId, running;
+
+function randomCell() {
+  return {
+    x: Math.floor(Math.random() * GRID_SIZE),
+    y: Math.floor(Math.random() * GRID_SIZE),
+  };
+}
+
+function placeFood() {
+  // Keep picking a cell until it lands somewhere the snake isn't.
+  let cell;
+  do {
+    cell = randomCell();
+  } while (snake.some(seg => seg.x === cell.x && seg.y === cell.y));
+  return cell;
+}
+
+function resetGame() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  direction = { x: 1, y: 0 };
+  nextDirection = direction;
+  score = 0;
+  speedMs = START_SPEED_MS;
+  food = placeFood();
+  scoreEl.textContent = score;
+  overlayEl.style.display = 'none';
+  running = true;
+
+  clearInterval(timerId);
+  timerId = setInterval(tick, speedMs);
+}
+
+function endGame() {
+  running = false;
+  clearInterval(timerId);
+  overlayTextEl.textContent = `Game Over — Score: ${score}`;
+  overlayEl.style.display = 'block';
+}
+
+function tick() {
+  direction = nextDirection;
+  const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+  // Wall collision.
+  if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
+    endGame();
+    return;
+  }
+  // Self collision.
+  if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+    endGame();
+    return;
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreEl.textContent = score;
+    food = placeFood();
+    // Speed up slightly every few points, with a floor so it never freezes.
+    if (score % 5 === 0 && speedMs > 50) {
+      speedMs -= 10;
+      clearInterval(timerId);
+      timerId = setInterval(tick, speedMs);
+    }
+  } else {
+    snake.pop(); // move forward: drop the tail unless we just ate
+  }
+
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#e63946';
+  ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+  snake.forEach((seg, i) => {
+    ctx.fillStyle = i === 0 ? '#8fdb8f' : '#4caf50';
+    ctx.fillRect(seg.x * CELL_SIZE + 1, seg.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+  });
+}
+
+const KEY_DIRECTIONS = {
+  ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 }, W: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 }, S: { x: 0, y: 1 },
+  ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 }, A: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 }, D: { x: 1, y: 0 },
+};
+
+document.addEventListener('keydown', (e) => {
+  if (!running) {
+    if (e.key === ' ') resetGame();
+    return;
+  }
+  const newDir = KEY_DIRECTIONS[e.key];
+  if (!newDir) return;
+  // Ignore a reversal straight into the snake's own neck.
+  if (newDir.x === -direction.x && newDir.y === -direction.y) return;
+  nextDirection = newDir;
+});
+
+restartBtn.addEventListener('click', resetGame);
+
+resetGame();
+</script>
+
+</body>
+</html>
